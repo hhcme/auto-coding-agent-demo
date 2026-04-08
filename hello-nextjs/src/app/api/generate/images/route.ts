@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     // Check if Volc Image API is configured
     if (!isVolcImageConfigured()) {
       return NextResponse.json(
-        { error: "Image generation service is not configured. Please set VOLC_ACCESS_KEY and VOLC_SECRET_KEY." },
+        { error: "Image generation service is not configured. Please set VOLC_API_KEY." },
         { status: 503 }
       );
     }

@@ -4,10 +4,18 @@
  * API: https://ark.cn-beijing.volces.com/api/v3/images/generations
  */
 
+import {
+  assertSafeDownloadUrl,
+  resolveAllowedApiBaseUrl,
+} from "@/lib/ai/network";
+
 // Configuration
 const VOLC_API_KEY = process.env.VOLC_API_KEY;
-const VOLC_IMAGE_BASE_URL = process.env.VOLC_IMAGE_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3/images/generations";
+const DEFAULT_VOLC_IMAGE_BASE_URL =
+  "https://ark.cn-beijing.volces.com/api/v3/images/generations";
+const VOLC_ALLOWED_HOSTS = ["ark.cn-beijing.volces.com"];
 const DEFAULT_MODEL = "doubao-seedream-4-5-251128";
+const VOLC_IMAGE_MODEL = process.env.VOLC_IMAGE_MODEL || DEFAULT_MODEL;
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -40,6 +48,21 @@ function sleep(ms: number): Promise<void> {
  */
 export function isVolcImageConfigured(): boolean {
   return !!VOLC_API_KEY;
+}
+
+function getVolcImageBaseUrl(): string {
+  try {
+    return resolveAllowedApiBaseUrl(
+      process.env.VOLC_IMAGE_BASE_URL,
+      DEFAULT_VOLC_IMAGE_BASE_URL,
+      VOLC_ALLOWED_HOSTS,
+      "VOLC_IMAGE_BASE_URL",
+    );
+  } catch (error) {
+    throw new VolcImageApiError(
+      error instanceof Error ? error.message : "Invalid VOLC_IMAGE_BASE_URL",
+    );
+  }
 }
 
 /**
@@ -100,7 +123,7 @@ export async function generateImage(
   const fullPrompt = `${prompt}${stylePrompt}`;
 
   const requestBody = {
-    model: DEFAULT_MODEL,
+    model: VOLC_IMAGE_MODEL,
     prompt: fullPrompt,
     size: options.size ?? "2K",
     watermark: false,
@@ -110,10 +133,11 @@ export async function generateImage(
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let lastError: Error | null = null;
+  const imageBaseUrl = getVolcImageBaseUrl();
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(VOLC_IMAGE_BASE_URL, {
+      const response = await fetch(imageBaseUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -149,7 +173,11 @@ export async function generateImage(
 
       // If URL, download and convert to base64
       if (imageData.url) {
-        const imageResponse = await fetch(imageData.url);
+        const downloadUrl = assertSafeDownloadUrl(
+          imageData.url,
+          "Volcano Engine image download URL",
+        );
+        const imageResponse = await fetch(downloadUrl);
         if (!imageResponse.ok) {
           throw new VolcImageApiError("Failed to download generated image");
         }

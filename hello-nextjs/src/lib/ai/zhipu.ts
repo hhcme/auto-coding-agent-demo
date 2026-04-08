@@ -7,12 +7,19 @@ import type {
   ZhipuChatMessage,
   ZhipuChatCompletionResponse,
   SceneDescription,
-  StoryToScenesResult,
 } from "@/types/ai";
+import { resolveAllowedApiBaseUrl } from "@/lib/ai/network";
+import {
+  buildStyleGuidance,
+  parseScenesJson,
+  STORY_TO_SCENES_SYSTEM_PROMPT,
+  STORY_TO_SCENES_USER_PROMPT_TEMPLATE,
+} from "@/lib/ai/scene-text-common";
 
 // Configuration
 const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY;
-const ZHIPU_BASE_URL = process.env.ZHIPU_BASE_URL || "https://open.bigmodel.cn/api/paas/v4";
+const DEFAULT_ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+const ZHIPU_ALLOWED_HOSTS = ["open.bigmodel.cn"];
 const ZHIPU_MODEL = process.env.ZHIPU_MODEL || "glm-4";
 
 // Retry configuration
@@ -48,92 +55,18 @@ export function isZhipuConfigured(): boolean {
   return !!ZHIPU_API_KEY;
 }
 
-/**
- * Story-to-scenes prompt template
- * Converts a user story into a structured list of scene descriptions
- */
-const STORY_TO_SCENES_SYSTEM_PROMPT = `你是一个专业的视频脚本编剧。你的任务是将用户提供的短故事拆分成适合制作短视频的独立场景。
-
-## 输出要求
-1. 将故事拆分为 4-8 个场景（根据故事长度调整）
-2. 每个场景应该：
-   - 有清晰的视觉描述
-   - 包含场景中的人物、动作、环境
-   - 适合 5-10 秒的视频展示
-   - 场景之间有连贯性
-
-3. 必须以 JSON 格式输出，格式如下：
-{
-  "scenes": [
-    {
-      "order_index": 1,
-      "description": "场景的详细视觉描述"
-    }
-  ]
-}
-
-## 注意事项
-- 不要输出任何额外文字，只输出 JSON
-- 确保每个场景描述足够详细，可以用于生成图片
-- 场景描述应该包含：场景环境、人物动作、情绪氛围、光影效果`;
-
-const STORY_TO_SCENES_USER_PROMPT_TEMPLATE = `请将以下故事拆分为视频场景：
-
-{story}
-
-{styleGuidance}`;
-
-/**
- * Build style guidance based on selected style
- */
-function buildStyleGuidance(style?: string): string {
-  const styleMap: Record<string, string> = {
-    realistic: "风格指导：写实风格，真实感强，自然光影",
-    anime: "风格指导：日本动漫风格，色彩鲜艳，线条清晰",
-    cartoon: "风格指导：卡通风格，夸张可爱，色彩明亮",
-    cinematic: "风格指导：电影质感，大气磅礴，专业运镜",
-    watercolor: "风格指导：水彩画风格，柔和淡雅，艺术感强",
-    oil_painting: "风格指导：油画风格，厚重质感，色彩浓郁",
-    sketch: "风格指导：素描风格，线条为主，黑白灰调",
-    cyberpunk: "风格指导：赛博朋克风格，霓虹灯光，科技感",
-    fantasy: "风格指导：奇幻风格，魔法元素，梦幻色彩",
-    scifi: "风格指导：科幻风格，未来感，高科技元素",
-  };
-
-  if (style && styleMap[style]) {
-    return `\n${styleMap[style]}`;
-  }
-  return "\n风格指导：写实风格";
-}
-
-/**
- * Parse JSON response from the model
- */
-function parseScenesJson(content: string): StoryToScenesResult {
-  // Try to extract JSON from the response
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new ZhipuApiError("Failed to parse scenes from response: no JSON found");
-  }
-
+function getZhipuBaseUrl(): string {
   try {
-    const result = JSON.parse(jsonMatch[0]) as StoryToScenesResult;
-
-    // Validate the structure
-    if (!result.scenes || !Array.isArray(result.scenes)) {
-      throw new ZhipuApiError("Invalid response structure: missing scenes array");
-    }
-
-    // Ensure each scene has required fields
-    result.scenes = result.scenes.map((scene, index) => ({
-      order_index: scene.order_index ?? index + 1,
-      description: scene.description,
-    }));
-
-    return result;
-  } catch (e) {
-    if (e instanceof ZhipuApiError) throw e;
-    throw new ZhipuApiError(`Failed to parse JSON: ${e instanceof Error ? e.message : "Unknown error"}`);
+    return resolveAllowedApiBaseUrl(
+      process.env.ZHIPU_BASE_URL,
+      DEFAULT_ZHIPU_BASE_URL,
+      ZHIPU_ALLOWED_HOSTS,
+      "ZHIPU_BASE_URL",
+    );
+  } catch (error) {
+    throw new ZhipuApiError(
+      error instanceof Error ? error.message : "Invalid ZHIPU_BASE_URL",
+    );
   }
 }
 
@@ -163,10 +96,11 @@ async function chatCompletion(
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let lastError: Error | null = null;
+  const baseUrl = getZhipuBaseUrl();
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(`${ZHIPU_BASE_URL}/chat/completions`, {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -247,8 +181,13 @@ export async function storyToScenes(
     throw new ZhipuApiError("Empty response from model");
   }
 
-  const result = parseScenesJson(content);
-  return result.scenes;
+  try {
+    return parseScenesJson(content).scenes;
+  } catch (error) {
+    throw new ZhipuApiError(
+      error instanceof Error ? error.message : "Failed to parse scene JSON",
+    );
+  }
 }
 
 /**
@@ -298,6 +237,11 @@ ${styleGuidance}`;
     throw new ZhipuApiError("Empty response from model");
   }
 
-  const result = parseScenesJson(content);
-  return result.scenes;
+  try {
+    return parseScenesJson(content).scenes;
+  } catch (error) {
+    throw new ZhipuApiError(
+      error instanceof Error ? error.message : "Failed to parse scene JSON",
+    );
+  }
 }

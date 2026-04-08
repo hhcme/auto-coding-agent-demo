@@ -8,13 +8,14 @@ interface HeaderProps {
   user: {
     email?: string;
   } | null;
+  authAvailable: boolean;
 }
 
 /**
  * Header component that shows navigation and auth status.
  * Includes responsive mobile menu.
  */
-export function Header({ user }: HeaderProps) {
+export function Header({ user, authAvailable }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navLinks = user
@@ -59,6 +60,10 @@ export function Header({ user }: HeaderProps) {
               </span>
               <LogoutButton />
             </>
+          ) : !authAvailable ? (
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-100">
+              Supabase 未配置
+            </span>
           ) : (
             <div className="flex items-center gap-2">
               <Link
@@ -131,6 +136,10 @@ export function Header({ user }: HeaderProps) {
                 </span>
                 <LogoutButton />
               </div>
+            ) : !authAvailable ? (
+              <p className="px-3 text-sm text-amber-700 dark:text-amber-300">
+                需要先配置 Supabase，认证功能才可用。
+              </p>
             ) : (
               <div className="flex flex-col gap-2">
                 <Link

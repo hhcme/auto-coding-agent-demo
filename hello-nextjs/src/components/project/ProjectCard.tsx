@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { ProjectWithPreview } from "@/lib/db/projects-list";
+import { getVideoStyleName } from "@/lib/video-style-options";
 import type { project_stage } from "@/types/database";
 
 /**
@@ -17,22 +18,6 @@ const stageConfig: Record<
   completed: { label: "完成", className: "bg-green-100 text-green-700" },
 };
 
-/**
- * Style display names
- */
-const styleNames: Record<string, string> = {
-  realistic: "写实风格",
-  anime: "动漫风格",
-  cartoon: "卡通风格",
-  cinematic: "电影风格",
-  watercolor: "水彩风格",
-  oil_painting: "油画风格",
-  sketch: "素描风格",
-  cyberpunk: "赛博朋克",
-  fantasy: "奇幻风格",
-  scifi: "科幻风格",
-};
-
 interface ProjectCardProps {
   project: ProjectWithPreview;
 }
@@ -42,9 +27,7 @@ interface ProjectCardProps {
  */
 export function ProjectCard({ project }: ProjectCardProps) {
   const stage = stageConfig[project.stage];
-  const styleName = project.style
-    ? styleNames[project.style] ?? project.style
-    : null;
+  const styleName = getVideoStyleName(project.style);
   const createdDate = new Date(project.created_at).toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "short",

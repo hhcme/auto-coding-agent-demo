@@ -4,6 +4,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { assertSafeDownloadUrl } from "@/lib/ai/network";
 import type {
   Image,
   ImageInsert,
@@ -456,6 +457,51 @@ export async function getVideoById(videoId: string): Promise<Video> {
 }
 
 /**
+ * Get a video generation task context for the current user.
+ * Returns null if the task does not belong to the authenticated user.
+ */
+export async function getVideoTaskContext(taskId: string): Promise<{
+  video: Video;
+  projectId: string;
+}> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("videos")
+    .select(
+      "id, scene_id, storage_path, url, duration, task_id, version, created_at, scenes!inner(project_id)",
+    )
+    .eq("task_id", taskId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      throw new MediaError("Video task not found", "not_found");
+    }
+    console.error("Error fetching video task:", error);
+    throw new MediaError("Failed to fetch video task", "database_error");
+  }
+
+  const sceneData = data.scenes as { project_id: string };
+
+  return {
+    video: {
+      id: data.id,
+      scene_id: data.scene_id,
+      storage_path: data.storage_path,
+      url: data.url,
+      duration: data.duration,
+      task_id: data.task_id,
+      version: data.version,
+      created_at: data.created_at,
+    },
+    projectId: sceneData.project_id,
+  };
+}
+
+/**
  * Delete all videos for a scene
  * @param sceneId - The scene ID
  * @returns Number of videos deleted
@@ -817,7 +863,8 @@ export async function downloadAndUpload(
   projectId: string,
   fileName: string
 ): Promise<{ path: string; url: string }> {
-  const response = await fetch(url);
+  const safeUrl = assertSafeDownloadUrl(url, "Download URL");
+  const response = await fetch(safeUrl);
 
   if (!response.ok) {
     throw new MediaError(`Failed to download file: ${response.status}`, "storage_error");

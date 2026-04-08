@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * Logout button component that signs the user out and redirects to login page.
@@ -15,11 +15,7 @@ export function LogoutButton() {
     setIsLoading(true);
 
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
+      const supabase = createClient();
       const { error } = await supabase.auth.signOut();
 
       if (error) {

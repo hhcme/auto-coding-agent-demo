@@ -12,6 +12,7 @@ import {
   downloadVideo,
 } from "@/lib/ai/volc-video";
 import {
+  getVideoTaskContext,
   updateCompletedVideo,
   uploadFile,
 } from "@/lib/db/media";
@@ -48,15 +49,32 @@ export async function GET(request: Request, { params }: RouteParams) {
 
     // Get query params
     const { searchParams } = new URL(request.url);
-    const sceneId = searchParams.get("sceneId");
-    const projectId = searchParams.get("projectId");
-    const videoId = searchParams.get("videoId");
+    const requestedSceneId = searchParams.get("sceneId");
+    const requestedProjectId = searchParams.get("projectId");
+    const requestedVideoId = searchParams.get("videoId");
+
+    // Resolve task ownership from the database instead of trusting query params.
+    const taskContext = await getVideoTaskContext(taskId);
+    const sceneId = taskContext.video.scene_id;
+    const projectId = taskContext.projectId;
+    const videoId = taskContext.video.id;
+
+    if (
+      (requestedSceneId && requestedSceneId !== sceneId) ||
+      (requestedProjectId && requestedProjectId !== projectId) ||
+      (requestedVideoId && requestedVideoId !== videoId)
+    ) {
+      return NextResponse.json(
+        { error: "Task context does not match the requested resource" },
+        { status: 400 },
+      );
+    }
 
     // Query task status
     const status = await getVideoTaskStatus(taskId);
 
     // If completed and we have all required info, download and save the video
-    if (status.status === "completed" && status.videoUrl && sceneId && projectId && videoId) {
+    if (status.status === "completed" && status.videoUrl) {
       try {
         // Download video
         const videoBuffer = await downloadVideo(status.videoUrl);
@@ -100,7 +118,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     }
 
     // If failed, update scene status
-    if (status.status === "failed" && sceneId) {
+    if (status.status === "failed") {
       await updateSceneVideoStatus(sceneId, "failed");
     }
 
@@ -118,6 +136,10 @@ export async function GET(request: Request, { params }: RouteParams) {
         { error: `Video status query error: ${error.message}` },
         { status: 502 }
       );
+    }
+
+    if (error instanceof Error && error.message.includes("Video task not found")) {
+      return NextResponse.json({ error: "Video task not found" }, { status: 404 });
     }
 
     return NextResponse.json(

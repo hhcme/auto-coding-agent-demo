@@ -294,18 +294,57 @@ graph TB
 
 ## 6. 外部 API 集成
 
-### 6.1 智谱AI GLM (故事→分镜)
+### 6.1 文本模型 (故事→分镜)
+
+当前代码支持两种 provider，通过环境变量 `SCENE_TEXT_PROVIDER` 选择：
+
+- `zhipu`：默认
+- `minimax`：适合 MiniMax Token Plan 或 PAYG Key
+
+#### 6.1.1 智谱AI GLM
 
 ```
-端点: https://open.bigmodel.cn/api/coding/paas/v4/chat/completions
+端点: https://open.bigmodel.cn/api/paas/v4/chat/completions
 认证: Bearer Token
-模型: glm-4.7
+模型: glm-4（默认，可通过 ZHIPU_MODEL 覆盖）
 ```
 
 请求示例:
 ```json
 {
-  "model": "glm-4.7",
+  "model": "glm-4",
+  "messages": [
+    {
+      "role": "system",
+      "content": "你是一个专业的分镜师，将故事拆解成多个分镜描述..."
+    },
+    {
+      "role": "user",
+      "content": "故事内容..."
+    }
+  ]
+}
+```
+
+#### 6.1.2 MiniMax Token Plan / PAYG
+
+MiniMax 的 Token Plan 和 PAYG 在代码里的区别不在接口，而在你使用的 API Key 类型。切换到 MiniMax 时，只需要：
+
+- `SCENE_TEXT_PROVIDER=minimax`
+- 配置 `MINIMAX_API_KEY`
+- 根据地区选择 `MINIMAX_BASE_URL`
+
+```
+国际版 Base URL: https://api.minimax.io/v1
+中国大陆 Base URL: https://api.minimaxi.com/v1
+认证: Bearer Token
+模型: MiniMax-M2.7（默认，可通过 MINIMAX_MODEL 覆盖）
+```
+
+请求示例:
+```json
+{
+  "model": "MiniMax-M2.7",
   "messages": [
     {
       "role": "system",
@@ -392,11 +431,24 @@ graph TB
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# 智谱AI
+# 文本模型 provider
+SCENE_TEXT_PROVIDER=zhipu
+
+# 智谱AI（默认）
 ZHIPU_API_KEY=your_zhipu_api_key
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+ZHIPU_MODEL=glm-4
+
+# MiniMax（可选，Token Plan / PAYG 都可用）
+MINIMAX_API_KEY=your_minimax_api_key
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_MODEL=MiniMax-M2.7
 
 # 火山引擎
 VOLC_API_KEY=your_volc_api_key
+VOLC_IMAGE_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/images/generations
+VOLC_IMAGE_MODEL=doubao-seedream-4-5-251128
+VOLC_VIDEO_TASKS_URL=https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks
+VOLC_VIDEO_MODEL=doubao-seedance-1-5-pro-251215
 ```

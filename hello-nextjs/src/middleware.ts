@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/middleware";
+import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { type NextRequest, NextResponse } from "next/server";
 
 /**
@@ -15,13 +16,6 @@ import { type NextRequest, NextResponse } from "next/server";
  * - /api/*
  */
 export async function middleware(request: NextRequest) {
-  const { supabase, response } = await createClient(request);
-
-  // Refresh session if expired - required for Server Components
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
   const { pathname } = request.nextUrl;
 
   // Protected routes that require authentication
@@ -33,6 +27,23 @@ export async function middleware(request: NextRequest) {
   // Auth routes that should redirect to home if already logged in
   const authRoutes = ["/login", "/register"];
   const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+
+  if (!hasSupabaseConfig()) {
+    if (isProtectedRoute) {
+      const redirectUrl = new URL("/", request.url);
+      redirectUrl.searchParams.set("setup", "supabase");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    return NextResponse.next();
+  }
+
+  const { supabase, response } = await createClient(request);
+
+  // Refresh session if expired - required for Server Components
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
   // If trying to access protected route without session, redirect to login
   if (isProtectedRoute && !session) {

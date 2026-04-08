@@ -11,10 +11,11 @@ import {
   deleteScenesByProjectId,
 } from "@/lib/db/scenes";
 import {
+  getSceneTextConfigHint,
+  isSceneTextConfigured,
+  SceneTextApiError,
   storyToScenes,
-  isZhipuConfigured,
-  ZhipuApiError,
-} from "@/lib/ai/zhipu";
+} from "@/lib/ai/scene-text";
 
 /**
  * POST /api/generate/scenes - Generate scenes from a project's story
@@ -32,10 +33,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check if Zhipu AI is configured
-    if (!isZhipuConfigured()) {
+    if (!isSceneTextConfigured()) {
       return NextResponse.json(
-        { error: "AI service is not configured. Please set ZHIPU_API_KEY." },
+        { error: `AI service is not configured. ${getSceneTextConfigHint()}` },
         { status: 503 }
       );
     }
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate scenes using Zhipu AI
+    // Generate scenes using the configured text provider
     const sceneDescriptions = await storyToScenes(project.story, project.style ?? undefined);
 
     if (sceneDescriptions.length === 0) {
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     console.error("Error generating scenes:", error);
 
     // Handle specific errors
-    if (error instanceof ZhipuApiError) {
+    if (error instanceof SceneTextApiError) {
       return NextResponse.json(
         { error: `AI service error: ${error.message}` },
         { status: 502 }

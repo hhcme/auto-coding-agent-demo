@@ -1,4 +1,5 @@
 import { Header } from "@/components/layout/Header";
+import { ProjectDetailActions } from "@/components/project/ProjectDetailActions";
 import { StageIndicator } from "@/components/project/StageIndicator";
 import { DraftStageView } from "@/components/scene/DraftStageView";
 import { SceneDescriptionList } from "@/components/scene/SceneDescriptionList";
@@ -7,6 +8,7 @@ import { SceneVideoList } from "@/components/scene/SceneVideoList";
 import { CompletedProjectView } from "@/components/scene/CompletedProjectView";
 import { createClient } from "@/lib/supabase/server";
 import { getProjectById } from "@/lib/db/projects";
+import { getVideoStyleName } from "@/lib/video-style-options";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 
@@ -37,19 +39,6 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const styleNames: Record<string, string> = {
-    realistic: "写实风格",
-    anime: "动漫风格",
-    cartoon: "卡通风格",
-    cinematic: "电影风格",
-    watercolor: "水彩风格",
-    oil_painting: "油画风格",
-    sketch: "素描风格",
-    cyberpunk: "赛博朋克",
-    fantasy: "奇幻风格",
-    scifi: "科幻风格",
-  };
-
   const createdDate = new Date(project.created_at).toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "long",
@@ -64,7 +53,7 @@ export default async function ProjectDetailPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
-      <Header user={user} />
+      <Header user={user} authAvailable />
       <main className="flex flex-1 flex-col px-4 py-8">
         <div className="mx-auto w-full max-w-4xl">
           {/* Breadcrumb */}
@@ -100,20 +89,18 @@ export default async function ProjectDetailPage({
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
                   {project.style && (
                     <span className="rounded-md bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
-                      {styleNames[project.style] ?? project.style}
+                      {getVideoStyleName(project.style)}
                     </span>
                   )}
                   <span>{project.scenes.length} 个分镜</span>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
-                  编辑项目
-                </button>
-                <button className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-900/50 dark:bg-zinc-900 dark:text-red-400 dark:hover:bg-red-900/20">
-                  删除项目
-                </button>
-              </div>
+              <ProjectDetailActions
+                projectId={project.id}
+                title={project.title}
+                story={project.story}
+                style={project.style}
+              />
             </div>
 
             {/* Story */}

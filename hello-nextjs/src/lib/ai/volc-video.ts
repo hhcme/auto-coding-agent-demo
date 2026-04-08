@@ -4,10 +4,18 @@
  * API: https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks
  */
 
+import {
+  assertSafeDownloadUrl,
+  resolveAllowedApiBaseUrl,
+} from "@/lib/ai/network";
+
 // Configuration
 const VOLC_API_KEY = process.env.VOLC_API_KEY;
-const VOLC_VIDEO_TASKS_URL = process.env.VOLC_VIDEO_TASKS_URL || "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks";
+const DEFAULT_VOLC_VIDEO_TASKS_URL =
+  "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks";
+const VOLC_ALLOWED_HOSTS = ["ark.cn-beijing.volces.com"];
 const DEFAULT_MODEL = "doubao-seedance-1-5-pro-251215";
+const VOLC_VIDEO_MODEL = process.env.VOLC_VIDEO_MODEL || DEFAULT_MODEL;
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -45,6 +53,21 @@ function sleep(ms: number): Promise<void> {
  */
 export function isVolcVideoConfigured(): boolean {
   return !!VOLC_API_KEY;
+}
+
+function getVolcVideoTasksUrl(): string {
+  try {
+    return resolveAllowedApiBaseUrl(
+      process.env.VOLC_VIDEO_TASKS_URL,
+      DEFAULT_VOLC_VIDEO_TASKS_URL,
+      VOLC_ALLOWED_HOSTS,
+      "VOLC_VIDEO_TASKS_URL",
+    );
+  } catch (error) {
+    throw new VolcVideoApiError(
+      error instanceof Error ? error.message : "Invalid VOLC_VIDEO_TASKS_URL",
+    );
+  }
 }
 
 /**
@@ -122,9 +145,13 @@ export async function createVideoTask(
   const duration = options.duration ?? 5;
   const watermark = options.watermark ?? false;
   const fullPrompt = `${prompt ?? ""} --duration ${duration} --camerafixed false --watermark ${watermark}`;
+  const safeImageUrl = assertSafeDownloadUrl(
+    imageUrl,
+    "Source image URL for video generation",
+  );
 
   const requestBody = {
-    model: DEFAULT_MODEL,
+    model: VOLC_VIDEO_MODEL,
     content: [
       {
         type: "text",
@@ -133,7 +160,7 @@ export async function createVideoTask(
       {
         type: "image_url",
         image_url: {
-          url: imageUrl,
+          url: safeImageUrl,
         },
       },
     ],
@@ -143,10 +170,11 @@ export async function createVideoTask(
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let lastError: Error | null = null;
+  const tasksUrl = getVolcVideoTasksUrl();
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(VOLC_VIDEO_TASKS_URL, {
+      const response = await fetch(tasksUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -224,10 +252,11 @@ export async function getVideoTaskStatus(taskId: string): Promise<VideoStatusRes
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let lastError: Error | null = null;
+  const tasksUrl = getVolcVideoTasksUrl();
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(`${VOLC_VIDEO_TASKS_URL}/${taskId}`, {
+      const response = await fetch(`${tasksUrl}/${taskId}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -354,7 +383,11 @@ export async function waitForVideoTask(
  * @returns Video buffer
  */
 export async function downloadVideo(videoUrl: string): Promise<Buffer> {
-  const response = await fetch(videoUrl);
+  const safeVideoUrl = assertSafeDownloadUrl(
+    videoUrl,
+    "Volcano Engine video download URL",
+  );
+  const response = await fetch(safeVideoUrl);
 
   if (!response.ok) {
     throw new VolcVideoApiError(`Failed to download video: ${response.status}`);

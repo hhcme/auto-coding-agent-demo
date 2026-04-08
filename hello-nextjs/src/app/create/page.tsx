@@ -16,7 +16,7 @@ export default async function CreatePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
-      <Header user={user} />
+      <Header user={user} authAvailable />
       <main className="flex flex-1 flex-col px-4 py-8">
         <div className="mx-auto w-full max-w-3xl">
           {/* Header */}

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { requireSupabaseConfig } from "@/lib/supabase/config";
 
 /**
  * Creates a Supabase client for middleware usage and handles session refresh.
@@ -25,10 +26,11 @@ export async function createClient(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });
+  const { url, anonKey } = requireSupabaseConfig();
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {
